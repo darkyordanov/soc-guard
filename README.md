@@ -65,8 +65,8 @@ Thresholds are configurable. Details & tuning: [docs/02-detection-rules.md](docs
 ## Quick start
 
 ```bash
-git clone https://github.com/darkyordanov/server-soc-guard.git
-cd server-soc-guard
+git clone https://github.com/darkyordanov/soc-guard.git
+cd soc-guard
 sudo cp examples/soc-guard.env.example /etc/soc-guard/soc-guard.env
 sudo nano /etc/soc-guard/soc-guard.env          # fill in token, paths, allowlist
 # ...then follow docs/INSTALL.md (user, service, cron, heartbeat)
