@@ -1,0 +1,23 @@
+[Unit]
+Description=SOC-Guard - self-hosted SIEM-lite collector
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=socguard
+Group=socguard
+Environment=SOC_GUARD_ENV=/etc/soc-guard/soc-guard.env
+ExecStart=/usr/bin/python3 /opt/soc-guard/soc_guard.py
+Restart=always
+RestartSec=5
+
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/soc-guard
+
+[Install]
+WantedBy=multi-user.target
