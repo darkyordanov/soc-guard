@@ -91,7 +91,7 @@ Full step-by-step for any server: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Roadmap
 
-- [ ] FastAPI + HTMX web dashboard (live alerts, acknowledge, traffic charts)
+- [x] FastAPI + HTMX web dashboard — live alerts, ack, traffic/severity/top-IP charts (see dashboard/)
 - [ ] File Integrity Monitoring (git-based config drift detection)
 - [ ] GeoIP / ASN enrichment on offender IPs
 - [ ] SQLi/XSS probe detection on request URIs

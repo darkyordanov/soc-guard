@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOC-Guard Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.12/htmx.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="hex">⬡</span> SOC-Guard <small>dashboard</small></div>
+  <div id="health" class="health">health: …</div>
+</header>
+
+<section class="stats" id="stats">
+  <div class="stat"><div class="k">—</div><div class="l">requests 24h</div></div>
+  <div class="stat"><div class="k">—</div><div class="l">unique IPs 24h</div></div>
+  <div class="stat"><div class="k">—</div><div class="l">open alerts</div></div>
+  <div class="stat crit"><div class="k">—</div><div class="l">critical 24h</div></div>
+  <div class="stat high"><div class="k">—</div><div class="l">high 24h</div></div>
+  <div class="stat med"><div class="k">—</div><div class="l">medium 24h</div></div>
+</section>
+
+<section class="grid">
+  <div class="card chart"><h3>Requests / hour (24h)</h3><canvas id="trafficChart"></canvas></div>
+  <div class="card chart"><h3>Alerts by severity</h3><canvas id="sevChart"></canvas></div>
+  <div class="card chart wide"><h3>Top offending IPs (404/403)</h3><canvas id="ipChart"></canvas></div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h3>Alerts</h3>
+    <label class="toggle"><input type="checkbox" id="showAll"> show acknowledged</label>
+  </div>
+  <table id="alerts"><thead><tr>
+    <th>time</th><th>sev</th><th>rule</th><th>source IP</th><th>summary</th><th>MITRE</th><th></th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h3>Events</h3>
+    <input id="eventSearch" placeholder="filter by IP / path / status…" autocomplete="off">
+  </div>
+  <table id="events"><thead><tr>
+    <th>time</th><th>src</th><th>IP</th><th>method</th><th>path</th><th>status</th><th>rt</th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<footer>SOC-Guard · read-only view · bound to localhost · reached over SSH tunnel</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
