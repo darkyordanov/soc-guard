@@ -1,6 +1,12 @@
 const $ = s => document.querySelector(s);
 const esc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// ISO-3166 alpha-2 -> regional-indicator flag emoji (e.g. "BG" -> 🇧🇬)
+function flag(cc){
+  if(!cc||cc.length!==2||!/^[A-Za-z]{2}$/.test(cc)) return '';
+  return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>0x1F1E6+c.charCodeAt(0)-65));
+}
+
 // fresh options object per chart (never share — Chart.js mutates scales in place)
 function opts(){
   return {
@@ -40,16 +46,20 @@ async function loadAlerts(){
   const show = $('#showAll').checked ? 'all' : 'open';
   const a = await j('/api/alerts?limit=100&show='+show);
   const tb = $('#alerts tbody');
-  if(!a.length){tb.innerHTML='<tr><td colspan="7" class="empty">no alerts</td></tr>';return;}
-  tb.innerHTML = a.map(x=>`<tr>
+  if(!a.length){tb.innerHTML='<tr><td colspan="8" class="empty">no alerts</td></tr>';return;}
+  tb.innerHTML = a.map(x=>{
+    const geo = x.geo ? (flag(x.country)+' '+esc(x.geo)) : '—';
+    const asn = x.asn ? '<br><span class="mitre">'+esc(x.asn)+'</span>' : '';
+    return `<tr>
     <td>${esc(x.ts.replace('T',' ').replace('+00:00',''))}</td>
     <td><span class="sev ${esc(x.severity)}">${esc(x.severity)}</span></td>
     <td>${esc(x.rule)}</td>
     <td class="ip">${esc(x.ip||'—')}</td>
+    <td class="geo">${geo}${asn}</td>
     <td>${esc(x.summary)}${x.detail?'<br><span class="mitre">'+esc(x.detail)+'</span>':''}</td>
     <td class="mitre">${esc(x.mitre||'')}</td>
     <td>${x.acknowledged?'<span class="mitre">ack</span>':`<button class="ackbtn" onclick="ack(${x.id})">ack</button>`}</td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 }
 window.ack = async id => { await j('/api/alerts/'+id+'/ack',{method:'POST'}); loadAlerts(); loadSummary(); };
 
@@ -80,12 +90,23 @@ async function loadCharts(){
   charts.s.update();
   const p = await j('/api/top-ips');
   charts.p.data.labels=p.labels; charts.p.data.datasets[0].data=p.values; charts.p.update();
+  // GeoIP country breakdown — hide the card entirely if GeoIP is off
+  const c = await j('/api/top-countries');
+  const card = $('#countryCard');
+  if(!c.enabled || !c.labels.length){ card.style.display='none'; }
+  else {
+    card.style.display='';
+    charts.c.data.labels=c.labels.map(cc=>flag(cc)+' '+cc);
+    charts.c.data.datasets[0].data=c.values;
+    charts.c.update();
+  }
 }
 
 function init(){
   charts.t = mkChart('trafficChart','line','#39ff7a',false);
   charts.s = mkChart('sevChart','bar','#39ff7a',false);
   charts.p = mkChart('ipChart','bar','#1f7a3f',true);
+  charts.c = mkChart('countryChart','bar','#2f8f6f',true);
   const refresh=()=>{loadSummary();loadAlerts();loadCharts();loadEvents();};
   refresh();
   setInterval(()=>{loadSummary();loadAlerts();},10000);

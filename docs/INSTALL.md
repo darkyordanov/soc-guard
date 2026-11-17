@@ -46,11 +46,15 @@ sudo -u socguard journalctl -u ssh -n1 >/dev/null 2>&1 && echo "CAN_READ_JOURNAL
 ## 3. Install the code
 
 ```bash
-sudo cp src/soc_guard.py src/soc_report.py /opt/soc-guard/
+sudo cp src/soc_guard.py src/soc_report.py src/mmdb.py /opt/soc-guard/
 sudo cp src/heartbeat.sh /opt/soc-guard/
 sudo chown -R socguard:socguard /opt/soc-guard
 sudo chmod 755 /opt/soc-guard/heartbeat.sh
 ```
+
+> `mmdb.py` is the stdlib MaxMind reader used by GeoIP enrichment (step 5c). It
+> has no dependencies; deploy it next to `soc_guard.py` even if you enable GeoIP
+> later.
 
 ---
 
@@ -120,6 +124,85 @@ sudo -u socguard sqlite3 /var/lib/soc-guard/soc.db \
 
 ---
 
+## 5b. (Optional) File Integrity Monitoring
+
+Pick the handful of files whose change would matter — web root, server configs,
+auth config — and list them in the env file:
+
+```
+SOC_FIM_ENABLED=1
+SOC_FIM_PATHS=/etc/nginx/nginx.conf, /etc/ssh/sshd_config, /var/www/html/*.php
+SOC_FIM_INTERVAL=300
+```
+
+`SOC_FIM_PATHS` is a comma-separated mix of exact files and shell globs — glob,
+not blind recursion, so you control the scope. The collector runs unprivileged,
+so it needs **read** access to each watched file. If a file lives under another
+user's home, grant read access narrowly with a POSIX ACL rather than loosening
+ownership:
+
+```bash
+sudo setfacl -m u:socguard:--x /home/appuser
+sudo setfacl -R -m u:socguard:rX /home/appuser/app
+```
+
+> If the service unit sets `ProtectHome=true`, the collector can't see `/home`
+> at all — relax it to `ProtectHome=read-only` so FIM can read a watched file
+> there while writes stay blocked.
+
+The baseline is strict: after any legitimate deploy, re-trust the new state:
+
+```bash
+sudo -u socguard SOC_GUARD_ENV=/etc/soc-guard/soc-guard.env \
+  python3 /opt/soc-guard/soc_guard.py --rebaseline
+```
+
+---
+
+## 5c. (Optional) GeoIP enrichment
+
+Enrich every IP-bearing alert with country / city / ASN, resolved locally — no
+per-alert API calls, no `geoip2` package (SOC-Guard ships its own stdlib
+`.mmdb` reader).
+
+1. Create a free **MaxMind** account → sign up for **GeoLite2** → generate a
+   **license key** (answer "yes" to "used for GeoIP Update").
+2. Install the updater and fetch the databases:
+
+   ```bash
+   sudo apt-get install -y geoipupdate            # Debian/Ubuntu
+   sudo tee /etc/GeoIP.conf >/dev/null <<'EOF'
+   AccountID YOUR_ACCOUNT_ID
+   LicenseKey YOUR_LICENSE_KEY
+   EditionIDs GeoLite2-City GeoLite2-Country GeoLite2-ASN
+   EOF
+   sudo chmod 600 /etc/GeoIP.conf
+   sudo geoipupdate -v
+   ```
+
+   Databases land in `/var/lib/GeoIP/`. Let the collector read them:
+
+   ```bash
+   sudo chmod 755 /var/lib/GeoIP
+   sudo -u socguard test -r /var/lib/GeoIP/GeoLite2-City.mmdb && echo OK
+   ```
+
+3. Keep them fresh (MaxMind publishes ~twice weekly):
+
+   ```bash
+   echo '0 3 * * 2,5 root /usr/bin/geoipupdate' | sudo tee /etc/cron.d/geoipupdate
+   ```
+
+4. Enable in the env file:
+
+   ```
+   SOC_GEOIP_ENABLED=1
+   SOC_GEOIP_CITY_DB=/var/lib/GeoIP/GeoLite2-City.mmdb
+   SOC_GEOIP_ASN_DB=/var/lib/GeoIP/GeoLite2-ASN.mmdb
+   ```
+
+---
+
 ## 6. Run as a service
 
 ```bash
@@ -180,4 +263,6 @@ sudo rm /etc/systemd/system/soc-guard.service
 sudo -u socguard crontab -r
 sudo rm -rf /opt/soc-guard /etc/soc-guard /var/lib/soc-guard
 sudo userdel socguard
+# if you enabled GeoIP:
+sudo rm -f /etc/cron.d/geoipupdate /etc/GeoIP.conf
 ```

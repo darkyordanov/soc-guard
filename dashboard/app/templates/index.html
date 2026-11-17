@@ -26,7 +26,8 @@
 <section class="grid">
   <div class="card chart"><h3>Requests / hour (24h)</h3><canvas id="trafficChart"></canvas></div>
   <div class="card chart"><h3>Alerts by severity</h3><canvas id="sevChart"></canvas></div>
-  <div class="card chart wide"><h3>Top offending IPs (404/403)</h3><canvas id="ipChart"></canvas></div>
+  <div class="card chart"><h3>Top offending IPs (404/403)</h3><canvas id="ipChart"></canvas></div>
+  <div class="card chart" id="countryCard"><h3>Top countries (404/403)</h3><canvas id="countryChart"></canvas></div>
 </section>
 
 <section class="card">
@@ -35,7 +36,7 @@
     <label class="toggle"><input type="checkbox" id="showAll"> show acknowledged</label>
   </div>
   <table id="alerts"><thead><tr>
-    <th>time</th><th>sev</th><th>rule</th><th>source IP</th><th>summary</th><th>MITRE</th><th></th>
+    <th>time</th><th>sev</th><th>rule</th><th>source IP</th><th>geo</th><th>summary</th><th>MITRE</th><th></th>
   </tr></thead><tbody></tbody></table>
 </section>
 
