@@ -17,16 +17,24 @@ See soc-guard.env.example and docs/INSTALL.md.
 
 License: MIT
 """
+import hashlib
+import glob as globmod
 import os
 import re
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
 import urllib.parse
 from collections import deque, defaultdict
 from datetime import datetime, timezone
+
+try:
+    import mmdb  # local stdlib MaxMind DB reader (ships alongside this file)
+except Exception:
+    mmdb = None
 
 # ---------------------------------------------------------------- config load
 ENV_PATH = os.environ.get("SOC_GUARD_ENV", "/etc/soc-guard/soc-guard.env")
@@ -43,10 +51,12 @@ def load_env(path):
                     env[k.strip()] = v.strip()
     except OSError:
         pass
-    # environment variables override file values
-    for k in list(env):
-        if k in os.environ:
-            env[k] = os.environ[k]
+    # real environment variables override (and may add to) file values, so the
+    # collector also works with no env file at all - e.g. systemd Environment=
+    # or a container passing SOC_* vars directly.
+    for k, v in os.environ.items():
+        if k.startswith("SOC_"):
+            env[k] = v
     return env
 
 
@@ -95,6 +105,31 @@ SCANNER_PATHS = re.compile(
     re.I,
 )
 
+# SQLi / XSS / traversal / command-injection probe signatures, matched against
+# the URL-decoded request URI (bots url-encode their payloads).
+EXPLOIT_SIG = re.compile(
+    cfg("SOC_EXPLOIT_REGEX",
+        r"union\s+select|select.+from|insert\s+into|drop\s+table"
+        r"|'\s*or\s+'?1'?\s*=\s*'?1|\bor\s+1=1|sleep\s*\(|benchmark\s*\("
+        r"|information_schema"                                            # SQLi
+        r"|<script|javascript:|onerror\s*=|onload\s*=|<img[^>]+src\s*="   # XSS
+        r"|\.\./\.\.|\.\.%2f|%2e%2e%2f|/etc/passwd|/proc/self"            # traversal/LFI
+        r"|;\s*(cat|wget|curl|bash|sh)\s|\|\s*(cat|wget|curl|bash|sh)\s"),  # cmd-inj
+    re.I,
+)
+
+# ---- File Integrity Monitoring (hash-based, portable - no git required) ----
+FIM_ENABLED = cfg("SOC_FIM_ENABLED", "0") == "1"
+# comma-separated list of files and/or shell globs, e.g.
+#   /etc/nginx/nginx.conf, /var/www/html/*.php, /etc/ssh/sshd_config
+FIM_PATHS = [p.strip() for p in cfg("SOC_FIM_PATHS", "").split(",") if p.strip()]
+FIM_INTERVAL = cfg_int("SOC_FIM_INTERVAL", 300)
+
+# ---- GeoIP enrichment (MaxMind GeoLite2 .mmdb; optional) ----
+GEOIP_ENABLED = cfg("SOC_GEOIP_ENABLED", "0") == "1"
+GEOIP_CITY_DB = cfg("SOC_GEOIP_CITY_DB", "/var/lib/GeoIP/GeoLite2-City.mmdb")
+GEOIP_ASN_DB = cfg("SOC_GEOIP_ASN_DB", "/var/lib/GeoIP/GeoLite2-ASN.mmdb")
+
 # ---------------------------------------------------------------- db
 DDL = """
 CREATE TABLE IF NOT EXISTS events (
@@ -106,6 +141,9 @@ CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL, rule TEXT, severity TEXT, ip TEXT,
     summary TEXT, detail TEXT, mitre TEXT, acknowledged INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS fim_baseline (
+    path TEXT PRIMARY KEY, sha256 TEXT NOT NULL, updated TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_alerts_ts ON alerts(ts);
@@ -161,6 +199,50 @@ def alert(rule, severity, ip, summary, detail="", mitre=""):
 
 EMOJI = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "⚪"}
 
+# cache per-IP enrichment so repeat offenders don't re-hit the DB every alert
+_geo_cache = {}
+
+
+def geo_enrich(ip):
+    """Return 'City, CC · ASxxx Org' for a public IP, or '' on miss/private.
+
+    Best-effort: never raises, so enrichment can't break alerting if a DB is
+    missing or an address is malformed.
+    """
+    if not (GEOIP_ENABLED and mmdb and ip):
+        return ""
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+    out = ""
+    try:
+        import ipaddress
+        a = ipaddress.ip_address(ip)
+        if a.is_private or a.is_loopback or a.is_reserved or a.is_link_local:
+            _geo_cache[ip] = ""
+            return ""
+        parts = []
+        if os.path.exists(GEOIP_CITY_DB):
+            rec = mmdb.reader(GEOIP_CITY_DB).get(ip)
+            if rec:
+                country = (rec.get("country") or {}).get("iso_code")
+                city = ((rec.get("city") or {}).get("names") or {}).get("en")
+                loc = ", ".join(x for x in (city, country) if x)
+                if loc:
+                    parts.append(loc)
+        if os.path.exists(GEOIP_ASN_DB):
+            arec = mmdb.reader(GEOIP_ASN_DB).get(ip)
+            if arec:
+                asn = arec.get("autonomous_system_number")
+                org = arec.get("autonomous_system_organization")
+                if asn:
+                    parts.append(f"AS{asn}" + (f" {org}" if org else ""))
+        out = " · ".join(parts)
+    except Exception as e:
+        print(f"geoip error for {ip}: {e}", flush=True)
+        out = ""
+    _geo_cache[ip] = out
+    return out
+
 
 def send_telegram(rule, severity, ip, summary, detail, mitre):
     if not TG_TOKEN or not TG_CHAT:
@@ -169,6 +251,9 @@ def send_telegram(rule, severity, ip, summary, detail, mitre):
              f"<b>{summary}</b>"]
     if ip:
         lines.append(f"Source IP: <code>{ip}</code>")
+        geo = geo_enrich(ip)
+        if geo:
+            lines.append(f"🌍 {geo}")
     if detail:
         lines.append(detail)
     if mitre:
@@ -239,6 +324,18 @@ def process_web(line):
                path=d["path"][:300], status=status, rt=rt, ua=d["ua"][:200],
                raw=line[:500])
 
+    # URL-decode once for exploit matching (payloads are usually percent-encoded)
+    try:
+        decoded = urllib.parse.unquote(d["path"])
+    except Exception:
+        decoded = d["path"]
+
+    if EXPLOIT_SIG.search(decoded):
+        alert("WEB_EXPLOIT", "HIGH", ip,
+              f"Exploit probe: {d['method']} {d['path'][:90]}",
+              detail=f"UA: {d['ua'][:70]} · status {status}",
+              mitre="T1190 - Exploit Public-Facing Application")
+
     if SCANNER_PATHS.search(d["path"]):
         alert("WEB_SCANNER_PATH", "MEDIUM", ip,
               f"Suspicious path probe: {d['method']} {d['path'][:80]}",
@@ -304,6 +401,124 @@ def process_ssh(line):
                   mitre="T1110 - Brute Force")
             q.clear()
 
+# ---------------------------------------------------------------- FIM (hash)
+def _sha256(path):
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _expand_fim_paths():
+    """Resolve the configured files/globs to a concrete set of file paths."""
+    files = set()
+    for pat in FIM_PATHS:
+        if any(c in pat for c in "*?["):
+            files.update(p for p in globmod.glob(pat, recursive=True)
+                         if os.path.isfile(p))
+        elif os.path.isfile(pat):
+            files.add(pat)
+        else:
+            # configured path that isn't a file (yet) - track so we can alert if
+            # it was expected but is missing against the baseline
+            files.add(pat)
+    return files
+
+
+def _load_baseline():
+    with db_lock, db() as conn:
+        return {r[0]: r[1] for r in conn.execute("SELECT path, sha256 FROM fim_baseline")}
+
+
+def _store_baseline(path, digest):
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with db_lock, db() as conn:
+        conn.execute(
+            "INSERT INTO fim_baseline(path,sha256,updated) VALUES(?,?,?) "
+            "ON CONFLICT(path) DO UPDATE SET sha256=excluded.sha256, updated=excluded.updated",
+            (path, digest, ts))
+
+
+def _delete_baseline(path):
+    with db_lock, db() as conn:
+        conn.execute("DELETE FROM fim_baseline WHERE path=?", (path,))
+
+
+def rebaseline():
+    """(Re)set the FIM baseline to the current on-disk state, then exit.
+
+    Run this once after a legitimate deploy:  soc_guard.py --rebaseline
+    """
+    init_db()
+    with db_lock, db() as conn:
+        conn.execute("DELETE FROM fim_baseline")
+    n = 0
+    for path in sorted(_expand_fim_paths()):
+        digest = _sha256(path)
+        if digest:
+            _store_baseline(path, digest)
+            n += 1
+    print(f"FIM baseline reset: {n} file(s) recorded", flush=True)
+
+
+def fim_worker():
+    if not FIM_ENABLED or not FIM_PATHS:
+        return
+    # seed baseline on first run (empty table) without alerting
+    if not _load_baseline():
+        for path in sorted(_expand_fim_paths()):
+            digest = _sha256(path)
+            if digest:
+                _store_baseline(path, digest)
+        print("FIM: initial baseline recorded", flush=True)
+
+    while True:
+        time.sleep(FIM_INTERVAL)
+        try:
+            baseline = _load_baseline()
+            current = _expand_fim_paths()
+            seen = set()
+            for path in sorted(current):
+                digest = _sha256(path)
+                seen.add(path)
+                old = baseline.get(path)
+                if digest is None:
+                    # configured path that is not a readable file right now
+                    if old is not None:
+                        alert("FILE_INTEGRITY_DELETED", "HIGH", None,
+                              f"Monitored file missing: {path}",
+                              detail="was present in baseline, now unreadable/gone",
+                              mitre="T1565.001 - Stored Data Manipulation")
+                        _delete_baseline(path)
+                    continue
+                if old is None:
+                    # a new file matched by a glob - strict: alert, then adopt
+                    alert("FILE_INTEGRITY_NEW", "MEDIUM", None,
+                          f"New file appeared in monitored scope: {path}",
+                          detail=f"sha256 {digest[:16]}…",
+                          mitre="T1565.001 - Stored Data Manipulation")
+                    _store_baseline(path, digest)
+                elif digest != old:
+                    alert("FILE_INTEGRITY_MODIFIED", "HIGH", None,
+                          f"Monitored file changed: {path}",
+                          detail=f"{old[:12]}… → {digest[:12]}…",
+                          mitre="T1565.001 - Stored Data Manipulation")
+                    _store_baseline(path, digest)
+            # files in baseline that no longer resolve at all (glob stopped matching)
+            for path in set(baseline) - seen:
+                alert("FILE_INTEGRITY_DELETED", "HIGH", None,
+                      f"Monitored file missing: {path}",
+                      detail="was present in baseline, no longer found",
+                      mitre="T1565.001 - Stored Data Manipulation")
+                _delete_baseline(path)
+        except Exception as e:
+            print(f"fim error: {e}", flush=True)
+
+
 # ---------------------------------------------------------------- workers
 def web_worker():
     for line in tail_follow(ACCESS_LOG):
@@ -357,12 +572,19 @@ def health_worker():
 def main():
     init_db()
     print(f"SOC-Guard started (env={ENV_PATH})", flush=True)
+    extras = []
+    if FIM_ENABLED and FIM_PATHS:
+        extras.append(f"FIM({len(FIM_PATHS)} pattern(s))")
+    if GEOIP_ENABLED and mmdb:
+        extras.append("GeoIP")
+    extra = (" + " + " + ".join(extras)) if extras else ""
     send_telegram("SOC_START", "LOW", None, "SOC-Guard started",
-                  f"Monitoring: {ACCESS_LOG} + SSH journal ({SSH_UNIT})", "")
+                  f"Monitoring: {ACCESS_LOG} + SSH journal ({SSH_UNIT}){extra}", "")
     threads = [
         threading.Thread(target=web_worker, daemon=True),
         threading.Thread(target=ssh_worker, daemon=True),
         threading.Thread(target=health_worker, daemon=True),
+        threading.Thread(target=fim_worker, daemon=True),
     ]
     for t in threads:
         t.start()
@@ -371,4 +593,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--rebaseline" in sys.argv:
+        rebaseline()
+    else:
+        main()

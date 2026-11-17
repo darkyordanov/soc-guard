@@ -18,9 +18,9 @@
 **A self-hosted SIEM-lite for a single Linux web server.** Pure Python 3
 stdlib — no dependencies, no agent, no 4 GB stack. It tails your web access log
 and the SSH journal, detects attacker behaviour with rules mapped to
-**MITRE ATT&CK**, stores everything in SQLite, and pushes real-time
-**Telegram** alerts. A daily report and an external dead-man's-switch heartbeat
-round it out.
+**MITRE ATT&CK**, watches critical files for tampering, enriches offender IPs
+with **GeoIP**, stores everything in SQLite, and pushes real-time **Telegram**
+alerts. A daily report and an external dead-man's-switch heartbeat round it out.
 
 > Built to run on a small VPS alongside your app — the collector uses about
 > **14 MB of RAM**.
@@ -31,8 +31,9 @@ round it out.
  (nginx/apache) ├──tail──▶┌──────────────┐    ┌─────────┐   ┌────────┐│
  SSH journal ───┘         │  soc_guard   │───▶│ SQLite  │   │Telegram││
  journalctl -u ssh        │  detections  │───▶│ soc.db  │──▶│CRIT/HGH││
- HTTP health probe ──────▶│  + health    │    └─────────┘   └────────┘│
-          │               └──────┬───────┘                            │
+ watched files ─────fim──▶│  + FIM       │    └─────────┘   └────────┘│
+ HTTP health probe ──────▶│  + GeoIP     │          ▲                 │
+          │               └──────┬───────┘   GeoLite2 .mmdb           │
           └───── heartbeat.sh ───┼── cron */5 ──▶ healthchecks.io ─────┘
                  soc_report.py ──┴── cron 08:00 ─▶ Telegram daily report
 ```
@@ -40,9 +41,15 @@ round it out.
 ## Features
 
 - **Zero dependencies** — Python 3 stdlib only; auditable, no supply-chain CVEs.
+  Includes a from-scratch MaxMind `.mmdb` reader (`src/mmdb.py`) so GeoIP needs
+  no `geoip2` package.
 - **Config-driven** — every path, threshold, allowlist and secret lives in one
   env file. Deploy on a new host without touching code.
-- **MITRE ATT&CK-mapped detections** — T1078, T1110, T1595, T1499.
+- **MITRE ATT&CK-mapped detections** — T1078, T1110, T1190, T1499, T1565.001,
+  T1595.
+- **File Integrity Monitoring** — hash-based, portable (no git required); alerts
+  on modified / deleted / newly-appeared files in a configured scope.
+- **GeoIP enrichment** — every IP-bearing alert carries `City, CC · ASxxx Org`.
 - **Real-time Telegram alerts** for `CRITICAL`/`HIGH`, de-duplicated per source.
 - **External heartbeat** — if the whole host dies, the monitor still alerts you.
 - **Daily report** — traffic, alert breakdown, top offending IPs.
@@ -55,6 +62,10 @@ round it out.
 |------|----------|--------------|---------|
 | `SSH_LOGIN_UNEXPECTED` | CRITICAL | T1078 Valid Accounts | successful SSH login by a user not in the allowlist |
 | `SITE_DOWN` | CRITICAL | T1499 Endpoint DoS | HTTP health check fails 3× in a row |
+| `FILE_INTEGRITY_MODIFIED` | HIGH | T1565.001 Stored Data Manipulation | a watched file's SHA-256 changed |
+| `FILE_INTEGRITY_DELETED` | HIGH | T1565.001 Stored Data Manipulation | a watched file disappeared |
+| `FILE_INTEGRITY_NEW` | MEDIUM | T1565.001 Stored Data Manipulation | a new file appeared in a watched glob |
+| `WEB_EXPLOIT` | HIGH | T1190 Exploit Public-Facing App | SQLi / XSS / traversal / cmd-inj signature in a request URI |
 | `SSH_BRUTEFORCE` | HIGH | T1110 Brute Force | > N failed SSH / window / IP |
 | `HTTP_5XX_SPIKE` | HIGH | T1499 Endpoint DoS | > N server errors / window (site-wide) |
 | `WEB_SCANNER_PATH` | MEDIUM | T1595 Active Scanning | request to `/.env`, `/.git`, `/api/`, `wp-admin`, … |
@@ -80,6 +91,7 @@ Full step-by-step for any server: **[docs/INSTALL.md](docs/INSTALL.md)**.
 - Python 3.8+ (stdlib only)
 - nginx or apache access log in combined/common format
 - A Telegram bot (free) for alerts; optionally a healthchecks.io check (free)
+- Optional, for GeoIP: free MaxMind GeoLite2 databases via `geoipupdate`
 
 ## Documentation
 
@@ -91,11 +103,12 @@ Full step-by-step for any server: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ## Roadmap
 
-- [x] FastAPI + HTMX web dashboard — live alerts, ack, traffic/severity/top-IP charts (see dashboard/)
-- [ ] File Integrity Monitoring (git-based config drift detection)
-- [ ] GeoIP / ASN enrichment on offender IPs
-- [ ] SQLi/XSS probe detection on request URIs
+- [x] FastAPI + HTMX web dashboard (live alerts, acknowledge, traffic charts)
+- [x] File Integrity Monitoring (hash-based config/content drift detection)
+- [x] GeoIP / ASN enrichment on offender IPs
+- [x] SQLi/XSS probe detection on request URIs
 - [ ] Apache-tuned log regex preset
+- [ ] Optional abuse-feed correlation (e.g. local AbuseIPDB cache)
 
 ## Scope & ethics
 
