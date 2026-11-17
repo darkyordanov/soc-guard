@@ -38,6 +38,14 @@ alerts. A daily report and an external dead-man's-switch heartbeat round it out.
                  soc_report.py ──┴── cron 08:00 ─▶ Telegram daily report
 ```
 
+<p align="center">
+  <img src="assets/telegram-alert.png" alt="Real-time Telegram alerts: a SQLi probe (WEB_EXPLOIT, T1190) with GeoIP, and a file-integrity change (FILE_INTEGRITY_DRIFT, T1565.001)" width="420">
+</p>
+
+<p align="center">
+  <em>Real alerts from a live deployment: a SQLi probe caught at the edge, and a file changing on disk — each tagged with its MITRE technique and enriched with GeoIP.</em>
+</p>
+
 ## Features
 
 - **Zero dependencies** — Python 3 stdlib only; auditable, no supply-chain CVEs.
@@ -72,6 +80,17 @@ alerts. A daily report and an external dead-man's-switch heartbeat round it out.
 | `WEB_SCANNER_404` | MEDIUM | T1595 Active Scanning | > N × HTTP 404 / window / IP |
 
 Thresholds are configurable. Details & tuning: [docs/02-detection-rules.md](docs/02-detection-rules.md).
+
+## Dashboard
+
+A read-only FastAPI + HTMX dashboard bound to `127.0.0.1` and reached over an
+SSH tunnel — no public port, no new attack surface. Live alert table with
+one-click acknowledge, traffic and severity charts, top offending IPs, and a
+GeoIP country breakdown.
+
+![SOC-Guard dashboard](assets/dashboard.png)
+
+More: [dashboard/README.md](dashboard/README.md).
 
 ## Quick start
 
