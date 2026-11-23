@@ -1,0 +1,32 @@
+title: New File Appeared in Monitored Scope (FIM)
+id: 8b9c0d1e-2f3a-4b4c-5d6e-7f8091122334
+status: experimental
+description: |
+    Detects a new file appearing inside a monitored glob — e.g. a dropped web
+    shell under a web root. MEDIUM because new files also appear during normal
+    maintenance; adopted into the baseline after first sighting. Mirrors
+    SOC-Guard's FILE_INTEGRITY_NEW rule.
+references:
+    - https://attack.mitre.org/techniques/T1565/001/
+    - https://attack.mitre.org/techniques/T1505/003/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.impact
+    - attack.t1565.001
+    - attack.persistence
+    - attack.t1505.003
+logsource:
+    product: soc-guard
+    category: file_integrity
+detection:
+    selection:
+        rule: 'FILE_INTEGRITY_NEW'
+    condition: selection
+fields:
+    - path
+    - sha256
+falsepositives:
+    - Legitimate new files created during maintenance or deploys
+    - Runtime-writable directories in the watch scope (narrow the glob)
+level: medium

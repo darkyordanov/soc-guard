@@ -1,0 +1,29 @@
+title: Monitored Site Unreachable (Health Check Failing)
+id: 9c0d1e2f-3a4b-4c5d-6e7f-809112233445
+status: experimental
+description: |
+    Detects the monitored site failing its HTTP health probe several times in a
+    row — an outage or a denial-of-service condition. Mirrors SOC-Guard's
+    SITE_DOWN rule (default: 3 consecutive failed probes). An external heartbeat
+    covers the case where the whole host — and this check — is down.
+references:
+    - https://attack.mitre.org/techniques/T1499/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.impact
+    - attack.t1499
+logsource:
+    product: soc-guard
+    category: availability
+detection:
+    selection:
+        rule: 'SITE_DOWN'
+    condition: selection
+fields:
+    - site
+    - consecutive_failures
+falsepositives:
+    - Planned maintenance or a deploy restarting the web server
+    - Network path issues between the monitor and the site
+level: critical

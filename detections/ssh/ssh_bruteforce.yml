@@ -1,0 +1,56 @@
+title: SSH Failed Authentication
+name: ssh_failed_auth
+id: 5e6f7a8b-9c0d-4e1f-2a3b-4c5d6e7f8091
+status: experimental
+description: |
+    Base event for a single failed SSH authentication (wrong password or invalid
+    user). Correlated below into a brute-force detection.
+references:
+    - https://attack.mitre.org/techniques/T1110/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.credential-access
+    - attack.t1110
+logsource:
+    product: linux
+    service: sshd
+detection:
+    failed:
+        message|contains:
+            - 'Failed password for'
+            - 'Invalid user'
+    condition: failed
+fields:
+    - message
+    - src_ip
+falsepositives:
+    - A user or script with stale credentials retrying
+level: low
+---
+title: SSH Brute-Force from Single Source IP
+id: 5e6f7a8b-9c0d-4e1f-2a3b-4c5d6e7f8092
+status: experimental
+description: |
+    Detects repeated failed SSH authentication from one source IP within a short
+    window — password/credential brute forcing. Mirrors SOC-Guard's
+    SSH_BRUTEFORCE rule (default: > 10 failures in 300s per IP).
+references:
+    - https://attack.mitre.org/techniques/T1110/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.credential-access
+    - attack.t1110
+correlation:
+    type: event_count
+    rules:
+        - ssh_failed_auth
+    group-by:
+        - src_ip
+    timespan: 5m
+    condition:
+        gte: 10
+falsepositives:
+    - A shared NAT/egress IP with several users mistyping passwords
+level: high

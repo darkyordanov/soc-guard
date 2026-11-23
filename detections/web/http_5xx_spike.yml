@@ -1,0 +1,53 @@
+title: HTTP 5xx Server Error
+name: web_5xx_response
+id: 3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e7f
+status: experimental
+description: |
+    Base event for a single HTTP 5xx server-error response. Correlated below
+    into a site-wide error-spike detection.
+references:
+    - https://attack.mitre.org/techniques/T1499/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.impact
+    - attack.t1499
+logsource:
+    category: webserver
+detection:
+    selection:
+        sc-status|re: '^5\d\d$'
+    condition: selection
+fields:
+    - c-ip
+    - c-uri
+    - sc-status
+falsepositives:
+    - A transient upstream error
+level: informational
+---
+title: HTTP 5xx Error Spike (Site-Wide)
+id: 3c4d5e6f-7a8b-4c9d-0e1f-2a3b4c5d6e80
+status: experimental
+description: |
+    Detects a site-wide spike of HTTP 5xx server errors within a short window —
+    an outage, a bad deploy, or exploitation driving the application into
+    errors. Mirrors SOC-Guard's HTTP_5XX_SPIKE rule
+    (default: > 5 server errors in 300s, site-wide).
+references:
+    - https://attack.mitre.org/techniques/T1499/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.impact
+    - attack.t1499
+correlation:
+    type: event_count
+    rules:
+        - web_5xx_response
+    timespan: 5m
+    condition:
+        gte: 5
+falsepositives:
+    - A legitimate deploy or dependency outage causing transient 5xx errors
+level: high

@@ -1,0 +1,56 @@
+title: HTTP 404 Response
+name: web_404_response
+id: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
+status: experimental
+description: |
+    Base event for a single HTTP 404 response. Correlated below into a
+    directory-enumeration detection.
+references:
+    - https://attack.mitre.org/techniques/T1595/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.reconnaissance
+    - attack.t1595
+logsource:
+    category: webserver
+detection:
+    selection:
+        sc-status: 404
+    condition: selection
+fields:
+    - c-ip
+    - c-uri
+    - sc-status
+falsepositives:
+    - A client requesting a removed page
+level: informational
+---
+title: Directory Enumeration via HTTP 404 Flood
+id: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6f
+status: experimental
+description: |
+    Detects a high rate of HTTP 404 responses from a single source IP within a
+    short window — the signature of directory/endpoint brute forcing
+    (gobuster / ffuf style). Mirrors SOC-Guard's WEB_SCANNER_404 rule
+    (default: > 15 x 404 in 60s per IP).
+references:
+    - https://attack.mitre.org/techniques/T1595/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.reconnaissance
+    - attack.t1595
+correlation:
+    type: event_count
+    rules:
+        - web_404_response
+    group-by:
+        - c-ip
+    timespan: 1m
+    condition:
+        gte: 15
+falsepositives:
+    - A broken deploy producing many 404s for real users
+    - A misconfigured crawler requesting removed pages
+level: medium

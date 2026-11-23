@@ -1,0 +1,30 @@
+title: Monitored File Content Modified (FIM)
+id: 6f7a8b9c-0d1e-4f2a-3b4c-5d6e7f809112
+status: experimental
+description: |
+    Detects a change in the SHA-256 hash of a monitored file against a trusted
+    baseline — unexpected modification of web root, server config, or auth
+    config on disk. Mirrors SOC-Guard's FILE_INTEGRITY_MODIFIED rule, whose
+    baseline is re-trusted only on an explicit deploy.
+references:
+    - https://attack.mitre.org/techniques/T1565/001/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.impact
+    - attack.t1565.001
+logsource:
+    product: soc-guard
+    category: file_integrity
+detection:
+    selection:
+        rule: 'FILE_INTEGRITY_MODIFIED'
+    condition: selection
+fields:
+    - path
+    - sha256_old
+    - sha256_new
+falsepositives:
+    - A legitimate deploy or config change before the baseline was re-trusted
+    - Runtime-writable files included in the watch scope (narrow the glob)
+level: high

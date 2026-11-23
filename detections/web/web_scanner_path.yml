@@ -1,0 +1,45 @@
+title: Sensitive Path Probing by Web Scanner
+id: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+status: experimental
+description: |
+    Detects requests to credential, config and admin paths commonly probed by
+    automated scanners (.env, .git, wp-admin, phpmyadmin, /api/, /actuator, …).
+    Mirrors SOC-Guard's WEB_SCANNER_PATH rule.
+references:
+    - https://attack.mitre.org/techniques/T1595/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.reconnaissance
+    - attack.t1595
+logsource:
+    category: webserver
+detection:
+    secrets_and_vcs:
+        c-uri|contains:
+            - '/.env'
+            - '/.git'
+            - '/.aws'
+            - '/.ssh'
+    cms_admin:
+        c-uri|contains:
+            - '/wp-admin'
+            - '/wp-login'
+            - '/wp-content'
+            - '/phpmyadmin'
+    app_surfaces:
+        c-uri|contains:
+            - '/actuator'
+            - '/vendor/'
+            - '/.vscode'
+            - '/owa/'
+            - '/autodiscover'
+    condition: secrets_and_vcs or cms_admin or app_surfaces
+fields:
+    - c-ip
+    - c-uri
+    - cs-user-agent
+falsepositives:
+    - Legitimate health checks or integrations hitting /api/ or /actuator
+    - Your own vulnerability scans
+level: medium

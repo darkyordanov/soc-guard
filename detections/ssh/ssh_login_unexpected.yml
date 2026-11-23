@@ -1,0 +1,33 @@
+title: Successful SSH Login by Non-Allowlisted User
+id: 4d5e6f7a-8b9c-4d0e-1f2a-3b4c5d6e7f80
+status: experimental
+description: |
+    Detects a successful interactive SSH login by an account that is not in the
+    expected-users allowlist. This fires on actual account use — not just
+    attempts — and is the highest-value rule for catching valid-account abuse.
+    Mirrors SOC-Guard's SSH_LOGIN_UNEXPECTED rule.
+references:
+    - https://attack.mitre.org/techniques/T1078/
+author: Yordan Yordanov (darkyordanov)
+date: 2026-11-23
+tags:
+    - attack.persistence
+    - attack.lateral-movement
+    - attack.t1078
+logsource:
+    product: linux
+    service: sshd
+detection:
+    accepted:
+        message|contains: 'Accepted '
+    allowlisted_users:
+        message|contains:
+            # tune this to your environment's expected SSH users
+            - ' for youruser from '
+    condition: accepted and not allowlisted_users
+fields:
+    - message
+falsepositives:
+    - A newly-added legitimate user not yet in the allowlist
+    - Automation/deploy accounts logging in (add them to the allowlist)
+level: critical
