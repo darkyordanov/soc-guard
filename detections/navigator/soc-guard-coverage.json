@@ -1,0 +1,82 @@
+{
+  "name": "SOC-Guard Detection Coverage",
+  "versions": {
+    "attack": "14",
+    "navigator": "4.9.1",
+    "layer": "4.5"
+  },
+  "domain": "enterprise-attack",
+  "description": "MITRE ATT&CK techniques detected by SOC-Guard (github.com/darkyordanov/soc-guard).",
+  "sorting": 0,
+  "hideDisabled": false,
+  "techniques": [
+    {
+      "techniqueID": "T1078",
+      "score": 1,
+      "color": "",
+      "comment": "Successful SSH Login by Non-Allowlisted User",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1110",
+      "score": 1,
+      "color": "",
+      "comment": "SSH Failed Authentication",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 1,
+      "color": "",
+      "comment": "Web Exploitation Attempt in Request URI",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1499",
+      "score": 2,
+      "color": "",
+      "comment": "HTTP 5xx Server Error; Monitored Site Unreachable (Health Check Failing)",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1505.003",
+      "score": 1,
+      "color": "",
+      "comment": "New File Appeared in Monitored Scope (FIM)",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1565.001",
+      "score": 3,
+      "color": "",
+      "comment": "Monitored File Content Modified (FIM); Monitored File Deleted or Unreadable (FIM); New File Appeared in Monitored Scope (FIM)",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1595",
+      "score": 2,
+      "color": "",
+      "comment": "HTTP 404 Response; Sensitive Path Probing by Web Scanner",
+      "enabled": true,
+      "showSubtechniques": false
+    }
+  ],
+  "gradient": {
+    "colors": [
+      "#d6f5d6",
+      "#2f9e44"
+    ],
+    "minValue": 1,
+    "maxValue": 3
+  },
+  "legendItems": [],
+  "showTacticRowBackground": true,
+  "tacticRowBackground": "#111511",
+  "selectTechniquesAcrossTactics": true
+}

@@ -82,6 +82,23 @@ alerts. A daily report and an external dead-man's-switch heartbeat round it out.
 
 Thresholds are configurable. Details & tuning: [docs/02-detection-rules.md](docs/02-detection-rules.md).
 
+## Detection-as-Code
+
+Detections aren't just regexes buried in a script — they're managed like code:
+
+- **Portable rules** — every detection is also a [Sigma](https://sigmahq.io)
+  rule in [`detections/`](detections/), convertible to Splunk, Elastic,
+  Sentinel and others via pySigma. One rule, written once, runs anywhere.
+- **Tested** — [`tests/`](tests/) feeds synthetic malicious *and* benign log
+  lines through the detection functions and asserts the right rule fires (and
+  nothing fires on clean traffic). 55 tests, run on every push.
+- **CI-validated** — [GitHub Actions](.github/workflows/ci.yml) lints, runs the
+  tests, and validates every Sigma rule on each push and PR.
+- **ATT&CK-mapped** — coverage is tracked as a
+  [Navigator layer](detections/navigator/) generated from the rules' own tags.
+
+Full write-up: [docs/04-detection-as-code.md](docs/04-detection-as-code.md).
+
 ## Dashboard
 
 A read-only FastAPI + HTMX dashboard bound to `127.0.0.1` and reached over an
@@ -120,6 +137,7 @@ Full step-by-step for any server: **[docs/INSTALL.md](docs/INSTALL.md)**.
 - [docs/01-architecture.md](docs/01-architecture.md) — components & data flow
 - [docs/02-detection-rules.md](docs/02-detection-rules.md) — rules → MITRE ATT&CK
 - [docs/03-ir-playbooks.md](docs/03-ir-playbooks.md) — incident-response playbooks
+- [docs/04-detection-as-code.md](docs/04-detection-as-code.md) — Sigma rules, tests & CI pipeline
 
 ## Roadmap
 
@@ -127,6 +145,7 @@ Full step-by-step for any server: **[docs/INSTALL.md](docs/INSTALL.md)**.
 - [x] File Integrity Monitoring (hash-based config/content drift detection)
 - [x] GeoIP / ASN enrichment on offender IPs
 - [x] SQLi/XSS probe detection on request URIs
+- [x] Detection-as-Code — Sigma rules, pytest suite, CI, ATT&CK Navigator layer
 - [ ] Apache-tuned log regex preset
 - [ ] Optional abuse-feed correlation (e.g. local AbuseIPDB cache)
 
