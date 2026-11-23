@@ -1,6 +1,5 @@
 """Tests for the web (nginx/apache access-log) detection rules."""
 import pytest
-
 from conftest import nginx_line, rules_fired
 
 
@@ -93,6 +92,6 @@ def test_5xx_spike_quiet_under_threshold(soc):
 
 
 def test_2xx_never_alerts(soc):
-    for i in range(30):
+    for _ in range(30):
         soc.process_web(nginx_line(ip="203.0.113.5", path="/", status=200))
     assert rules_fired(soc) == set()

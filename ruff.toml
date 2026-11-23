@@ -1,0 +1,26 @@
+# Ruff config for SOC-Guard.
+# We lint for real problems — unused imports/names, obvious bugs, modern syntax —
+# not stylistic purity. A log-processing collector deliberately uses broad
+# try/except around per-line parsing so one malformed line can never crash a
+# detection thread, so the "blind except" family is intentionally allowed.
+
+target-version = "py38"
+line-length = 100
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (unused imports, undefined names, real bugs)
+    "I",    # import sorting
+    "UP",   # pyupgrade (modern syntax)
+    "B",    # bugbear (likely bugs)
+]
+ignore = [
+    "E402",    # module-level import not at top — tests adjust sys.path first
+    "E501",    # line length handled by formatter, not worth failing CI over
+    "B008",    # function call in default arg — not used problematically here
+]
+
+[lint.per-file-ignores]
+# tests intentionally import after sys.path manipulation and use helper imports
+"tests/*" = ["E402", "F401"]

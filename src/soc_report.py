@@ -9,9 +9,9 @@ Config comes from the same env file as soc_guard.py
 """
 import os
 import sqlite3
-import urllib.request
 import urllib.parse
-from datetime import datetime, timezone, timedelta
+import urllib.request
+from datetime import datetime, timedelta, timezone
 
 ENV_PATH = os.environ.get("SOC_GUARD_ENV", "/etc/soc-guard/soc-guard.env")
 

@@ -17,8 +17,8 @@ See soc-guard.env.example and docs/INSTALL.md.
 
 License: MIT
 """
-import hashlib
 import glob as globmod
+import hashlib
 import os
 import re
 import sqlite3
@@ -26,9 +26,9 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.request
 import urllib.parse
-from collections import deque, defaultdict
+import urllib.request
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 try:
@@ -275,7 +275,7 @@ def tail_follow(path):
     """Yield new lines from a growing file, surviving truncation/rotation."""
     while not os.path.exists(path):
         time.sleep(2)
-    f = open(path, "r", errors="replace")
+    f = open(path, errors="replace")
     f.seek(0, os.SEEK_END)
     inode = os.fstat(f.fileno()).st_ino
     while True:
@@ -287,7 +287,7 @@ def tail_follow(path):
         try:
             if os.stat(path).st_ino != inode or os.stat(path).st_size < f.tell():
                 f.close()
-                f = open(path, "r", errors="replace")
+                f = open(path, errors="replace")
                 inode = os.fstat(f.fileno()).st_ino
         except OSError:
             time.sleep(2)

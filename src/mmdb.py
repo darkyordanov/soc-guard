@@ -182,7 +182,7 @@ class MMDB:
 
     def get(self, ip_str):
         addr = ipaddress.ip_address(ip_str)
-        bits = format(int(addr), "0{}b".format(addr.max_prefixlen))
+        bits = format(int(addr), f"0{addr.max_prefixlen}b")
         # IPv4 lookup inside an IPv6 tree: walk the first 96 bits (::ffff:0:0)
         if self.ip_version == 6 and addr.version == 4:
             bits = "0" * 96 + bits
